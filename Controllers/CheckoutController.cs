@@ -49,6 +49,7 @@ public class CheckoutController : Controller
 
         if (!ModelState.IsValid)
         {
+            ClearPaymentToken(model);
             PopulateClientConfig();
             return View(model);
         }
@@ -64,6 +65,7 @@ public class CheckoutController : Controller
         if (!result.Success)
         {
             ModelState.AddModelError(string.Empty, result.Message ?? "Payment failed. Please try again.");
+            ClearPaymentToken(model);
             PopulateClientConfig();
             return View(model);
         }
@@ -85,5 +87,16 @@ public class CheckoutController : Controller
         ViewBag.AcceptJsUrl = _authNet.AcceptJsUrl;
         ViewBag.ApiLoginId = _authNet.ApiLoginId;
         ViewBag.PublicClientKey = _authNet.PublicClientKey;
+    }
+
+    // The Accept.js payment nonce is single-use. After a redisplay we must drop the
+    // consumed token (from the model AND ModelState, since asp-for re-renders the
+    // posted value) so the browser generates a fresh one on the next attempt.
+    private void ClearPaymentToken(CheckoutViewModel model)
+    {
+        model.OpaqueDataValue = string.Empty;
+        model.OpaqueDataDescriptor = string.Empty;
+        ModelState.Remove(nameof(CheckoutViewModel.OpaqueDataValue));
+        ModelState.Remove(nameof(CheckoutViewModel.OpaqueDataDescriptor));
     }
 }

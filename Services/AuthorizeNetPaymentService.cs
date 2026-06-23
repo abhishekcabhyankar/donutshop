@@ -127,9 +127,14 @@ public class AuthorizeNetPaymentService : IPaymentService
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             var tx = result?.TransactionResponse;
-            if (tx is not null && tx.ResponseCode == "1")
+            // responseCode 1 = Approved, 4 = Held for review (accepted, pending
+            // merchant/fraud-filter review). Both mean the order was captured.
+            if (tx is not null && (tx.ResponseCode == "1" || tx.ResponseCode == "4"))
             {
-                return new PaymentResult(true, tx.TransId, "Approved");
+                var message = tx.ResponseCode == "4"
+                    ? "Your order has been received and is pending review."
+                    : "Approved";
+                return new PaymentResult(true, tx.TransId, message);
             }
 
             var errorMessage =
