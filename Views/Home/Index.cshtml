@@ -1,0 +1,32 @@
+﻿@model IReadOnlyList<DonutShop.Models.Donut>
+@{
+    ViewData["Title"] = "Menu";
+}
+
+<section class="hero text-center">
+    <h1 class="display-4 fw-bold">Fresh-Baked Donuts, Delivered 🍩</h1>
+    <p class="lead">Hand-crafted every morning. Order your favorites below.</p>
+</section>
+
+<div class="row g-4 mt-2">
+    @foreach (var donut in Model)
+    {
+        <div class="col-12 col-sm-6 col-lg-4">
+            <div class="card donut-card h-100 shadow-sm">
+                <div class="donut-emoji">@donut.Emoji</div>
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title">@donut.Name</h5>
+                    <p class="card-text text-muted flex-grow-1">@donut.Description</p>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="price">@donut.Price.ToString("C")</span>
+                        <form asp-controller="Cart" asp-action="Add" method="post" class="m-0">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@donut.Id" />
+                            <button type="submit" class="btn btn-pink">Add to cart</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>

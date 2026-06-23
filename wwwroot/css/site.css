@@ -1,0 +1,79 @@
+html {
+  font-size: 14px;
+}
+
+@media (min-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+}
+
+html {
+  position: relative;
+  min-height: 100%;
+}
+
+body {
+  margin-bottom: 60px;
+  background: #fff7fb;
+}
+
+/* --- Sweet Ring Donuts theme --- */
+:root {
+  --pink: #ff5fa2;
+  --pink-dark: #e23e87;
+}
+
+.btn-pink {
+  background-color: var(--pink);
+  border-color: var(--pink);
+  color: #fff;
+}
+
+.btn-pink:hover,
+.btn-pink:focus {
+  background-color: var(--pink-dark);
+  border-color: var(--pink-dark);
+  color: #fff;
+}
+
+.navbar-brand {
+  font-weight: 700;
+  color: var(--pink-dark) !important;
+}
+
+.hero {
+  padding: 2.5rem 1rem;
+  background: linear-gradient(135deg, #fff0f6 0%, #ffe9f2 100%);
+  border-radius: 1rem;
+  margin-bottom: 1rem;
+}
+
+.donut-card {
+  border: none;
+  border-radius: 1rem;
+  overflow: hidden;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+
+.donut-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 0.75rem 1.5rem rgba(226, 62, 135, 0.18) !important;
+}
+
+.donut-emoji {
+  font-size: 4.5rem;
+  text-align: center;
+  padding: 1.25rem 0 0.25rem;
+  background: #fff0f6;
+}
+
+.price {
+  font-weight: 700;
+  color: var(--pink-dark);
+  font-size: 1.15rem;
+}

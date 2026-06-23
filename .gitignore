@@ -1,0 +1,20 @@
+# .NET
+bin/
+obj/
+*.user
+
+# User secrets are stored outside the repo, but never commit local config overrides
+appsettings.*.local.json
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Publish output
+publish/
+*.zip

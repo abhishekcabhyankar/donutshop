@@ -1,0 +1,184 @@
+@model DonutShop.Models.CheckoutViewModel
+@{
+    ViewData["Title"] = "Checkout";
+    var apiLoginId = (string?)ViewBag.ApiLoginId ?? "";
+    var publicClientKey = (string?)ViewBag.PublicClientKey ?? "";
+    var acceptJsUrl = (string?)ViewBag.AcceptJsUrl ?? "https://jstest.authorize.net/v1/Accept.js";
+    var configured = !string.IsNullOrWhiteSpace(apiLoginId) && !string.IsNullOrWhiteSpace(publicClientKey);
+}
+
+<h1 class="mb-4">Checkout</h1>
+
+@if (!configured)
+{
+    <div class="alert alert-warning">
+        <strong>Payment is not configured yet.</strong> Add your Authorize.NET
+        <code>ApiLoginId</code> and <code>PublicClientKey</code> (and the server-side
+        <code>TransactionKey</code>) via user-secrets or environment variables. See the README.
+    </div>
+}
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div asp-validation-summary="All" class="text-danger mb-3"></div>
+
+        <form id="paymentForm" asp-action="Index" method="post" novalidate>
+            @Html.AntiForgeryToken()
+            <input type="hidden" asp-for="OpaqueDataDescriptor" id="dataDescriptor" />
+            <input type="hidden" asp-for="OpaqueDataValue" id="dataValue" />
+
+            <h5 class="mb-3">Delivery details</h5>
+            <div class="mb-3">
+                <label asp-for="FullName" class="form-label"></label>
+                <input asp-for="FullName" class="form-control" autocomplete="name" />
+                <span asp-validation-for="FullName" class="text-danger"></span>
+            </div>
+            <div class="mb-3">
+                <label asp-for="Email" class="form-label"></label>
+                <input asp-for="Email" class="form-control" autocomplete="email" />
+                <span asp-validation-for="Email" class="text-danger"></span>
+            </div>
+            <div class="mb-3">
+                <label asp-for="Address" class="form-label"></label>
+                <input asp-for="Address" class="form-control" autocomplete="street-address" />
+                <span asp-validation-for="Address" class="text-danger"></span>
+            </div>
+            <div class="row">
+                <div class="col-md-5 mb-3">
+                    <label asp-for="City" class="form-label"></label>
+                    <input asp-for="City" class="form-control" autocomplete="address-level2" />
+                    <span asp-validation-for="City" class="text-danger"></span>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label asp-for="State" class="form-label"></label>
+                    <input asp-for="State" class="form-control" autocomplete="address-level1" />
+                    <span asp-validation-for="State" class="text-danger"></span>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label asp-for="Zip" class="form-label"></label>
+                    <input asp-for="Zip" class="form-control" autocomplete="postal-code" />
+                    <span asp-validation-for="Zip" class="text-danger"></span>
+                </div>
+            </div>
+
+            <hr class="my-4" />
+            <h5 class="mb-3">Payment</h5>
+            <p class="text-muted small">
+                🔒 Your card details are sent directly to Authorize.NET and never touch our server.
+            </p>
+
+            @* These card fields intentionally have NO name attribute so they are never posted to our server. *@
+            <div class="mb-3">
+                <label for="cardNumber" class="form-label">Card number</label>
+                <input type="text" id="cardNumber" class="form-control" inputmode="numeric"
+                       autocomplete="cc-number" placeholder="4111 1111 1111 1111" />
+            </div>
+            <div class="row">
+                <div class="col-4 mb-3">
+                    <label for="expMonth" class="form-label">Month</label>
+                    <input type="text" id="expMonth" class="form-control" inputmode="numeric"
+                           autocomplete="cc-exp-month" placeholder="MM" maxlength="2" />
+                </div>
+                <div class="col-4 mb-3">
+                    <label for="expYear" class="form-label">Year</label>
+                    <input type="text" id="expYear" class="form-control" inputmode="numeric"
+                           autocomplete="cc-exp-year" placeholder="YYYY" maxlength="4" />
+                </div>
+                <div class="col-4 mb-3">
+                    <label for="cardCode" class="form-label">CVV</label>
+                    <input type="text" id="cardCode" class="form-control" inputmode="numeric"
+                           autocomplete="cc-csc" placeholder="123" maxlength="4" />
+                </div>
+            </div>
+
+            <div id="paymentError" class="alert alert-danger d-none"></div>
+
+            <button id="payButton" type="submit" class="btn btn-pink btn-lg w-100" @(configured ? "" : "disabled")>
+                Pay @Model.Cart.Total.ToString("C")
+            </button>
+        </form>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">Order summary</h5>
+                <ul class="list-group list-group-flush mb-3">
+                    @foreach (var item in Model.Cart.Items)
+                    {
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>@item.Name × @item.Quantity</span>
+                            <span>@item.LineTotal.ToString("C")</span>
+                        </li>
+                    }
+                </ul>
+                <div class="d-flex justify-content-between fw-bold fs-5">
+                    <span>Total</span>
+                    <span>@Model.Cart.Total.ToString("C")</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script type="text/javascript" src="@acceptJsUrl" charset="utf-8"></script>
+    <script type="text/javascript">
+        (function () {
+            const authData = {
+                clientKey: "@Html.Raw(publicClientKey)",
+                apiLoginID: "@Html.Raw(apiLoginId)"
+            };
+
+            const form = document.getElementById("paymentForm");
+            const payButton = document.getElementById("payButton");
+            const errorBox = document.getElementById("paymentError");
+
+            function showError(message) {
+                errorBox.textContent = message;
+                errorBox.classList.remove("d-none");
+                payButton.disabled = false;
+                payButton.textContent = "Pay @Model.Cart.Total.ToString("C")";
+            }
+
+            function responseHandler(response) {
+                if (response.messages.resultCode === "Error") {
+                    const msg = response.messages.message
+                        .map(m => m.text).join(" ");
+                    showError(msg || "We couldn't validate your card. Please check the details.");
+                    return;
+                }
+                document.getElementById("dataDescriptor").value = response.opaqueData.dataDescriptor;
+                document.getElementById("dataValue").value = response.opaqueData.dataValue;
+                // Re-submit the form; card fields have no name so are not transmitted to our server.
+                form.submit();
+            }
+
+            form.addEventListener("submit", function (e) {
+                // If we already have the token, let the form post normally.
+                if (document.getElementById("dataValue").value) {
+                    return;
+                }
+                e.preventDefault();
+                errorBox.classList.add("d-none");
+                payButton.disabled = true;
+                payButton.textContent = "Processing…";
+
+                const cardData = {
+                    cardNumber: document.getElementById("cardNumber").value.replace(/\s+/g, ""),
+                    month: document.getElementById("expMonth").value,
+                    year: document.getElementById("expYear").value,
+                    cardCode: document.getElementById("cardCode").value,
+                    zip: document.getElementById("Zip").value
+                };
+
+                if (typeof Accept === "undefined") {
+                    showError("Payment library failed to load. Please refresh and try again.");
+                    return;
+                }
+
+                Accept.dispatchData({ authData: authData, cardData: cardData }, responseHandler);
+            });
+        })();
+    </script>
+}
