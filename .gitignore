@@ -18,3 +18,8 @@ Thumbs.db
 # Publish output
 publish/
 *.zip
+
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml
