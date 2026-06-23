@@ -13,6 +13,7 @@ public class CheckoutController : Controller
     private readonly IPaymentService _payments;
     private readonly AuthorizeNetOptions _authNet;
     private readonly ApplePayOptions _applePay;
+    private readonly IWebHostEnvironment _env;
     private readonly ILogger<CheckoutController> _logger;
 
     public CheckoutController(
@@ -20,12 +21,14 @@ public class CheckoutController : Controller
         IPaymentService payments,
         IOptions<AuthorizeNetOptions> authNet,
         IOptions<ApplePayOptions> applePay,
+        IWebHostEnvironment env,
         ILogger<CheckoutController> logger)
     {
         _cart = cart;
         _payments = payments;
         _authNet = authNet.Value;
         _applePay = applePay.Value;
+        _env = env;
         _logger = logger;
     }
 
@@ -138,10 +141,14 @@ public class CheckoutController : Controller
         X509Certificate2 clientCert;
         try
         {
+            // Allow the configured paths to be relative to the app content root
+            // (e.g. a "certs/" folder shipped in the deploy bundle).
+            var certPath = ResolveContentPath(_applePay.MerchantIdCertPath);
+            var keyPath = ResolveContentPath(_applePay.MerchantIdKeyPath);
+
             // CreateFromPemFile gives an ephemeral key; re-import via PKCS12 so the
             // private key is usable for TLS client authentication on every platform.
-            using var pem = X509Certificate2.CreateFromPemFile(
-                _applePay.MerchantIdCertPath, _applePay.MerchantIdKeyPath);
+            using var pem = X509Certificate2.CreateFromPemFile(certPath, keyPath);
             clientCert = new X509Certificate2(pem.Export(X509ContentType.Pkcs12));
         }
         catch (Exception ex)
@@ -192,4 +199,7 @@ public class CheckoutController : Controller
     private static bool IsApplePayHost(string host) =>
         host.Equals("apple.com", StringComparison.OrdinalIgnoreCase) ||
         host.EndsWith(".apple.com", StringComparison.OrdinalIgnoreCase);
+
+    private string ResolveContentPath(string path) =>
+        Path.IsPathRooted(path) ? path : Path.Combine(_env.ContentRootPath, path);
 }

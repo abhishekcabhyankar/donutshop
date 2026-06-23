@@ -32,6 +32,23 @@ dotnet publish -c Release -o ./publish
 
 # ---- 2. Bundle the publish output with the Procfile at the archive root -----
 cp Procfile ./publish/Procfile
+
+# Ship the Apple Pay Merchant Identity certificate + key (used for the merchant
+# validation mutual-TLS call). These are NOT in git — they live outside the repo.
+# If they aren't present locally we still deploy, but with Apple Pay disabled.
+APPLEPAY_CERT_DIR="${APPLEPAY_CERT_DIR:-$HOME/applepay-certs}"
+APPLEPAY_ENABLED="false"
+if [ -f "$APPLEPAY_CERT_DIR/apple_merchant_id.pem" ] && [ -f "$APPLEPAY_CERT_DIR/apple_merchant_id.key" ]; then
+  mkdir -p ./publish/certs
+  cp "$APPLEPAY_CERT_DIR/apple_merchant_id.pem" ./publish/certs/apple_merchant_id.pem
+  cp "$APPLEPAY_CERT_DIR/apple_merchant_id.key" ./publish/certs/apple_merchant_id.key
+  chmod 600 ./publish/certs/apple_merchant_id.key
+  APPLEPAY_ENABLED="true"
+  echo "==> Bundled Apple Pay merchant identity certificate (Apple Pay will be enabled)."
+else
+  echo "==> Apple Pay certs not found in $APPLEPAY_CERT_DIR; deploying with Apple Pay disabled."
+fi
+
 ( cd publish && zip -qr ../deploy.zip . )
 echo "==> Created deploy.zip"
 
@@ -69,7 +86,13 @@ eb setenv \
   AuthorizeNet__Environment="$(get Environment)" \
   AuthorizeNet__ApiLoginId="$(get ApiLoginId)" \
   AuthorizeNet__TransactionKey="$(get TransactionKey)" \
-  AuthorizeNet__PublicClientKey="$(get PublicClientKey)"
+  AuthorizeNet__PublicClientKey="$(get PublicClientKey)" \
+  ApplePay__Enabled="$APPLEPAY_ENABLED" \
+  ApplePay__MerchantIdentifier="merchant.com.yourdomain.sweetring" \
+  ApplePay__DisplayName="Sweet Ring Donuts" \
+  ApplePay__DomainName="shop.poseidon-team-donuts-shop.com" \
+  ApplePay__MerchantIdCertPath="certs/apple_merchant_id.pem" \
+  ApplePay__MerchantIdKeyPath="certs/apple_merchant_id.key"
 
 echo "==> Deployment complete."
 eb status "$ENV_NAME"
