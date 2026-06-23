@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using System.Net.Http.Json;
+using System.Security.Cryptography.X509Certificates;
 using DonutShop.Models;
 using DonutShop.Services;
 
@@ -10,15 +12,21 @@ public class CheckoutController : Controller
     private readonly CartService _cart;
     private readonly IPaymentService _payments;
     private readonly AuthorizeNetOptions _authNet;
+    private readonly ApplePayOptions _applePay;
+    private readonly ILogger<CheckoutController> _logger;
 
     public CheckoutController(
         CartService cart,
         IPaymentService payments,
-        IOptions<AuthorizeNetOptions> authNet)
+        IOptions<AuthorizeNetOptions> authNet,
+        IOptions<ApplePayOptions> applePay,
+        ILogger<CheckoutController> logger)
     {
         _cart = cart;
         _payments = payments;
         _authNet = authNet.Value;
+        _applePay = applePay.Value;
+        _logger = logger;
     }
 
     public IActionResult Index()
@@ -87,6 +95,11 @@ public class CheckoutController : Controller
         ViewBag.AcceptJsUrl = _authNet.AcceptJsUrl;
         ViewBag.ApiLoginId = _authNet.ApiLoginId;
         ViewBag.PublicClientKey = _authNet.PublicClientKey;
+
+        ViewBag.ApplePayEnabled = _applePay.IsConfigured;
+        ViewBag.ApplePayMerchantId = _applePay.MerchantIdentifier;
+        ViewBag.ApplePayDisplayName = _applePay.DisplayName;
+        ViewBag.ApplePayDomain = _applePay.DomainName;
     }
 
     // The Accept.js payment nonce is single-use. After a redisplay we must drop the
@@ -99,4 +112,84 @@ public class CheckoutController : Controller
         ModelState.Remove(nameof(CheckoutViewModel.OpaqueDataValue));
         ModelState.Remove(nameof(CheckoutViewModel.OpaqueDataDescriptor));
     }
+
+    // Apple Pay (web) merchant validation. The browser hands us a one-time Apple
+    // validation URL; we call it over mutual-TLS using the Merchant Identity
+    // certificate and return Apple's opaque merchant session to the page.
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ValidateMerchant(
+        [FromBody] ApplePayValidationRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!_applePay.IsConfigured)
+            return BadRequest(new { error = "Apple Pay is not enabled." });
+
+        // SSRF guard: only ever connect to an Apple-controlled HTTPS host.
+        if (request is null ||
+            string.IsNullOrWhiteSpace(request.ValidationUrl) ||
+            !Uri.TryCreate(request.ValidationUrl, UriKind.Absolute, out var validationUri) ||
+            validationUri.Scheme != Uri.UriSchemeHttps ||
+            !IsApplePayHost(validationUri.Host))
+        {
+            return BadRequest(new { error = "Invalid validation URL." });
+        }
+
+        X509Certificate2 clientCert;
+        try
+        {
+            // CreateFromPemFile gives an ephemeral key; re-import via PKCS12 so the
+            // private key is usable for TLS client authentication on every platform.
+            using var pem = X509Certificate2.CreateFromPemFile(
+                _applePay.MerchantIdCertPath, _applePay.MerchantIdKeyPath);
+            clientCert = new X509Certificate2(pem.Export(X509ContentType.Pkcs12));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load the Apple Pay merchant identity certificate.");
+            return StatusCode(500, new { error = "Merchant certificate unavailable." });
+        }
+
+        using (clientCert)
+        using (var handler = new HttpClientHandler())
+        {
+            handler.ClientCertificates.Add(clientCert);
+            using var client = new HttpClient(handler);
+
+            var payload = new
+            {
+                merchantIdentifier = _applePay.MerchantIdentifier,
+                displayName = _applePay.DisplayName,
+                initiative = "web",
+                initiativeContext = _applePay.DomainName
+            };
+
+            try
+            {
+                using var appleResponse =
+                    await client.PostAsJsonAsync(validationUri, payload, cancellationToken);
+                var body = await appleResponse.Content.ReadAsStringAsync(cancellationToken);
+
+                if (!appleResponse.IsSuccessStatusCode)
+                {
+                    _logger.LogError(
+                        "Apple Pay merchant validation failed ({Status}): {Body}",
+                        appleResponse.StatusCode, body);
+                    return StatusCode(502, new { error = "Merchant validation failed." });
+                }
+
+                // Hand Apple's merchant session back to the browser verbatim.
+                return Content(body, "application/json");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error calling the Apple Pay merchant validation endpoint.");
+                return StatusCode(502, new { error = "Merchant validation failed." });
+            }
+        }
+    }
+
+    private static bool IsApplePayHost(string host) =>
+        host.Equals("apple.com", StringComparison.OrdinalIgnoreCase) ||
+        host.EndsWith(".apple.com", StringComparison.OrdinalIgnoreCase);
 }

@@ -19,6 +19,15 @@ Thumbs.db
 publish/
 *.zip
 
+# Apple Pay / TLS certificate material — NEVER commit private keys or certs
+*.pem
+*.key
+*.p12
+*.pfx
+*.cer
+*.csr
+certs/
+
 # Elastic Beanstalk Files
 .elasticbeanstalk/*
 !.elasticbeanstalk/*.cfg.yml

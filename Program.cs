@@ -1,11 +1,16 @@
 using DonutShop.Models;
 using DonutShop.Services;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.FileProviders;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+
+// Allow the antiforgery token to be supplied via a request header so the Apple Pay
+// merchant-validation fetch() (which posts JSON, not a form) can be protected too.
+builder.Services.AddAntiforgery(options => options.HeaderName = "RequestVerificationToken");
 
 // Honor X-Forwarded-* headers from a reverse proxy (e.g. the nginx fronting
 // Elastic Beanstalk / a load balancer) so the app sees the original HTTPS scheme.
@@ -26,6 +31,10 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 // Authorize.NET configuration (bind from appsettings + user-secrets/env).
 builder.Services.Configure<AuthorizeNetOptions>(
     builder.Configuration.GetSection(AuthorizeNetOptions.SectionName));
+
+// Apple Pay configuration (bind from appsettings + user-secrets/env).
+builder.Services.Configure<ApplePayOptions>(
+    builder.Configuration.GetSection(ApplePayOptions.SectionName));
 
 // Session-backed shopping cart.
 builder.Services.AddHttpContextAccessor();
@@ -58,6 +67,21 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
+
+// Serve the Apple Pay domain-association file from wwwroot/.well-known. That file has
+// no extension, so the default static-file middleware would 404 it; this scoped
+// provider serves only /.well-known/* as text/plain.
+var wellKnownPath = Path.Combine(app.Environment.WebRootPath, ".well-known");
+if (Directory.Exists(wellKnownPath))
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(wellKnownPath),
+        RequestPath = "/.well-known",
+        ServeUnknownFileTypes = true,
+        DefaultContentType = "text/plain"
+    });
+}
 
 app.UseRouting();
 

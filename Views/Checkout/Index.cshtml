@@ -5,6 +5,12 @@
     var publicClientKey = (string?)ViewBag.PublicClientKey ?? "";
     var acceptJsUrl = (string?)ViewBag.AcceptJsUrl ?? "https://jstest.authorize.net/v1/Accept.js";
     var configured = !string.IsNullOrWhiteSpace(apiLoginId) && !string.IsNullOrWhiteSpace(publicClientKey);
+
+    var applePayEnabled = ViewBag.ApplePayEnabled is true;
+    var applePayMerchantId = (string?)ViewBag.ApplePayMerchantId ?? "";
+    var applePayDisplayName = (string?)ViewBag.ApplePayDisplayName ?? "Sweet Ring Donuts";
+    var applePayDomain = (string?)ViewBag.ApplePayDomain ?? "";
+    var totalInvariant = Model.Cart.Total.ToString(System.Globalization.CultureInfo.InvariantCulture);
 }
 
 <h1 class="mb-4">Checkout</h1>
@@ -63,6 +69,16 @@
 
             <hr class="my-4" />
             <h5 class="mb-3">Payment</h5>
+
+            @if (applePayEnabled)
+            {
+                <div id="applePayContainer" class="mb-3 d-none">
+                    <apple-pay-button id="applePayButton" buttonstyle="black" type="buy" locale="en-US"
+                                      style="display:block;width:100%;height:48px;"></apple-pay-button>
+                    <div class="text-center text-muted small my-2">— or pay with card —</div>
+                </div>
+            }
+
             <p class="text-muted small">
                 🔒 Your card details are sent directly to Authorize.NET and never touch our server.
             </p>
@@ -181,4 +197,85 @@
             });
         })();
     </script>
+
+    @if (applePayEnabled)
+    {
+        <script type="text/javascript"
+                src="https://applepay.cdn-apple.com/jsapi/v1.1.0/apple-pay-sdk.js"></script>
+        <script type="text/javascript">
+            (function () {
+                const config = {
+                    merchantId: "@Html.Raw(applePayMerchantId)",
+                    displayName: "@Html.Raw(applePayDisplayName)",
+                    domain: "@Html.Raw(applePayDomain)",
+                    amount: "@totalInvariant",
+                    validateUrl: "@Url.Action("ValidateMerchant", "Checkout")"
+                };
+
+                const form = document.getElementById("paymentForm");
+                const container = document.getElementById("applePayContainer");
+                const button = document.getElementById("applePayButton");
+                const errorBox = document.getElementById("paymentError");
+                const tokenField = form.querySelector('input[name="__RequestVerificationToken"]');
+
+                if (!window.ApplePaySession || !ApplePaySession.canMakePayments() || !container) {
+                    return; // Not Safari / no Apple Pay capability: leave the button hidden.
+                }
+                container.classList.remove("d-none");
+
+                function showError(message) {
+                    if (!errorBox) return;
+                    errorBox.textContent = message;
+                    errorBox.classList.remove("d-none");
+                }
+
+                button.addEventListener("click", function () {
+                    const request = {
+                        countryCode: "US",
+                        currencyCode: "USD",
+                        supportedNetworks: ["visa", "masterCard", "amex", "discover"],
+                        merchantCapabilities: ["supports3DS"],
+                        total: { label: config.displayName, amount: config.amount, type: "final" }
+                    };
+
+                    const session = new ApplePaySession(3, request);
+
+                    session.onvalidatemerchant = async function (event) {
+                        try {
+                            const resp = await fetch(config.validateUrl, {
+                                method: "POST",
+                                headers: {
+                                    "Content-Type": "application/json",
+                                    "RequestVerificationToken": tokenField ? tokenField.value : ""
+                                },
+                                body: JSON.stringify({ validationUrl: event.validationURL })
+                            });
+                            if (!resp.ok) throw new Error("merchant validation failed");
+                            const merchantSession = await resp.json();
+                            session.completeMerchantValidation(merchantSession);
+                        } catch (err) {
+                            showError("Apple Pay could not be started. Please use a card instead.");
+                            try { session.abort(); } catch (e) { }
+                        }
+                    };
+
+                    session.onpaymentauthorized = function (event) {
+                        // Authorize.NET expects the Apple Pay token (paymentData) base64-encoded
+                        // with the Apple descriptor; the existing charge path handles the rest.
+                        const token = event.payment.token.paymentData;
+                        const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(token))));
+                        document.getElementById("dataDescriptor").value = "COMMON.APPLE.INAPP.PAYMENT";
+                        document.getElementById("dataValue").value = encoded;
+                        session.completePayment(ApplePaySession.STATUS_SUCCESS);
+                        // dataValue is set, so the form's submit handler posts normally.
+                        form.submit();
+                    };
+
+                    session.oncancel = function () { /* shopper dismissed the sheet */ };
+
+                    session.begin();
+                });
+            })();
+        </script>
+    }
 }

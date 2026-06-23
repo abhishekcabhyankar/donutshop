@@ -43,3 +43,9 @@ public class CheckoutResultViewModel
     public decimal AmountCharged { get; set; }
     public string? Message { get; set; }
 }
+
+public class ApplePayValidationRequest
+{
+    // The one-time merchant-validation URL supplied by Apple Pay in the browser.
+    public string ValidationUrl { get; set; } = string.Empty;
+}
