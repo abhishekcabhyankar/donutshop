@@ -13,6 +13,7 @@ public class CheckoutController : Controller
     private readonly IPaymentService _payments;
     private readonly AuthorizeNetOptions _authNet;
     private readonly ApplePayOptions _applePay;
+    private readonly GooglePayOptions _googlePay;
     private readonly IWebHostEnvironment _env;
     private readonly ILogger<CheckoutController> _logger;
 
@@ -21,6 +22,7 @@ public class CheckoutController : Controller
         IPaymentService payments,
         IOptions<AuthorizeNetOptions> authNet,
         IOptions<ApplePayOptions> applePay,
+        IOptions<GooglePayOptions> googlePay,
         IWebHostEnvironment env,
         ILogger<CheckoutController> logger)
     {
@@ -28,6 +30,7 @@ public class CheckoutController : Controller
         _payments = payments;
         _authNet = authNet.Value;
         _applePay = applePay.Value;
+        _googlePay = googlePay.Value;
         _env = env;
         _logger = logger;
     }
@@ -103,6 +106,19 @@ public class CheckoutController : Controller
         ViewBag.ApplePayMerchantId = _applePay.MerchantIdentifier;
         ViewBag.ApplePayDisplayName = _applePay.DisplayName;
         ViewBag.ApplePayDomain = _applePay.DomainName;
+
+        // Google Pay needs the Authorize.NET API Login ID as the gatewayMerchantId
+        // so Google encrypts the token for our gateway.
+        ViewBag.GooglePayEnabled =
+            _googlePay.IsConfigured && !string.IsNullOrWhiteSpace(_authNet.ApiLoginId);
+        ViewBag.GooglePayEnvironment = _googlePay.ClientEnvironment;
+        ViewBag.GooglePayMerchantId = _googlePay.MerchantId;
+        ViewBag.GooglePayMerchantName = _googlePay.MerchantName;
+        // Authorize.NET requires the account's Payment Gateway ID here (NOT the API
+        // Login ID). Fall back to the API Login ID only if it isn't configured.
+        ViewBag.GooglePayGatewayMerchantId = string.IsNullOrWhiteSpace(_googlePay.GatewayMerchantId)
+            ? _authNet.ApiLoginId
+            : _googlePay.GatewayMerchantId;
     }
 
     // The Accept.js payment nonce is single-use. After a redisplay we must drop the

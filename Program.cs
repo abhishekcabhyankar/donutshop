@@ -36,6 +36,10 @@ builder.Services.Configure<AuthorizeNetOptions>(
 builder.Services.Configure<ApplePayOptions>(
     builder.Configuration.GetSection(ApplePayOptions.SectionName));
 
+// Google Pay configuration (bind from appsettings + user-secrets/env).
+builder.Services.Configure<GooglePayOptions>(
+    builder.Configuration.GetSection(GooglePayOptions.SectionName));
+
 // Session-backed shopping cart.
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddDistributedMemoryCache();

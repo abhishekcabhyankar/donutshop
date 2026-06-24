@@ -17,6 +17,10 @@ REGION="us-east-1"
 PLATFORM="64bit Amazon Linux 2023 v3.11.2 running .NET 8"
 INSTANCE_TYPE="t3.small"
 
+# Authorize.NET Payment Gateway ID used as the Google Pay gatewayMerchantId
+# (NOT the API Login ID). Override by exporting GOOGLEPAY_GATEWAY_MERCHANT_ID.
+GOOGLEPAY_GATEWAY_MERCHANT_ID="${GOOGLEPAY_GATEWAY_MERCHANT_ID:-949217}"
+
 # ---- Tooling on PATH --------------------------------------------------------
 export DOTNET_ROOT="$HOME/.dotnet"
 eval "$(/opt/homebrew/bin/brew shellenv)"   # puts aws + eb on PATH
@@ -92,7 +96,12 @@ eb setenv \
   ApplePay__DisplayName="Sweet Ring Donuts" \
   ApplePay__DomainName="shop.poseidon-team-donuts-shop.com" \
   ApplePay__MerchantIdCertPath="certs/apple_merchant_id.pem" \
-  ApplePay__MerchantIdKeyPath="certs/apple_merchant_id.key"
+  ApplePay__MerchantIdKeyPath="certs/apple_merchant_id.key" \
+  GooglePay__Enabled="true" \
+  GooglePay__Environment="TEST" \
+  GooglePay__MerchantName="Sweet Ring Donuts" \
+  GooglePay__MerchantId="BCR2DN7TTDPO56JI" \
+  GooglePay__GatewayMerchantId="$GOOGLEPAY_GATEWAY_MERCHANT_ID"
 
 echo "==> Deployment complete."
 eb status "$ENV_NAME"
